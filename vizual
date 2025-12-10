@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <title>Reakční čas – vizuální podnět</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #2b2b2b;
+      color: #ffffff;
+    }
+
+    #app {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      transition: background-color 0.2s ease;
+      padding: 1rem;
+    }
+
+    h1 {
+      font-size: clamp(1.6rem, 2.2vw, 2.2rem);
+      margin-bottom: 1rem;
+    }
+
+    #message {
+      font-size: clamp(1.2rem, 1.8vw, 1.8rem);
+      margin-bottom: 1.5rem;
+    }
+
+    #result {
+      font-size: clamp(1.4rem, 2.2vw, 2.2rem);
+      font-weight: bold;
+      margin-top: 0.5rem;
+    }
+
+    #startBtn {
+      font-size: clamp(1.1rem, 1.6vw, 1.6rem);
+      padding: 0.8rem 1.6rem;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      margin-top: 1.5rem;
+      background: #ffffff;
+      color: #222;
+      font-weight: 600;
+      box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.4);
+      transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.1s ease;
+      touch-action: manipulation;
+    }
+
+    #startBtn:active {
+      transform: translateY(2px);
+      box-shadow: 0 0.2rem 0.5rem rgba(0, 0, 0, 0.6);
+      background-color: #e4e4e4;
+    }
+
+    .hint {
+      margin-top: 1rem;
+      font-size: 0.95rem;
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>Měření reakčního času</h1>
+    <div id="message">
+      Klikni na <strong>Spustit test</strong>.<br>
+      Až se obrazovka zbarví <strong style="color:#ff4444;">červeně</strong>, co nejrychleji se jí dotkni.
+    </div>
+    <div id="result"></div>
+    <button id="startBtn">Spustit test</button>
+    
+  </div>
+
+  <script>
+    const app = document.getElementById('app');
+    const messageEl = document.getElementById('message');
+    const resultEl = document.getElementById('result');
+    const startBtn = document.getElementById('startBtn');
+
+    // Stav může být: "idle", "waiting", "ready", "done"
+    let state = "idle";
+    let timeoutId = null;
+    let startTime = null;
+
+    function resetVisual() {
+      // Základní vzhled – neutrální pozadí
+      app.style.backgroundColor = "#2b2b2b";
+      resultEl.textContent = "";
+    }
+
+    function startTest() {
+      // Zruš případný předchozí timeout
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
+      state = "waiting";
+      resetVisual();
+
+      messageEl.innerHTML = "Čekej, než se obrazovka zbarví <strong style=\"color:#ff4444;\">červeně</strong>...";
+      startBtn.style.display = "none";
+
+      // Pozadí je nyní zelené, žák ví, že čeká
+      app.style.backgroundColor = "#2ecc71";
+
+      // Náhodné zpoždění 5–60 s
+      const minDelay = 5;    // sekundy
+      const maxDelay = 60;   // sekundy
+      const delayMs = (minDelay + Math.random() * (maxDelay - minDelay)) * 1000;
+
+      timeoutId = setTimeout(() => {
+        state = "ready";
+        timeoutId = null;
+        startTime = performance.now();
+        app.style.backgroundColor = "#e74c3c"; // červená
+        messageEl.innerHTML = "TEĎ! Dotkni se obrazovky co nejrychleji!";
+      }, delayMs);
+    }
+
+    function handleReaction(event) {
+      // aby se touch nezduplikoval na click
+      event.preventDefault();
+
+      // Ignoruj klik na tlačítko start, ten se řeší zvlášť
+      if (event.target === startBtn) return;
+
+      if (state === "waiting") {
+        // Klikl příliš brzy
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        state = "idle";
+        app.style.backgroundColor = "#2b2b2b";
+        messageEl.innerHTML = "Příliš brzy! Obrazovka ještě nebyla červená.";
+        resultEl.textContent = "";
+        startBtn.textContent = "Zkusit znovu";
+        startBtn.style.display = "inline-block";
+      } else if (state === "ready") {
+        const endTime = performance.now();
+        const reactionTime = (endTime - startTime) / 1000; // v sekundách
+
+        state = "done";
+        app.style.backgroundColor = "#3498db"; // modrá po zachycení
+
+        messageEl.textContent = "Tvůj reakční čas:";
+        resultEl.textContent = reactionTime.toFixed(3) + " s";
+
+        startBtn.textContent = "Spustit test znovu";
+        startBtn.style.display = "inline-block";
+      } else {
+        // v ostatních stavech (idle/done) klik ignorujeme
+      }
+    }
+
+    startBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startTest();
+    });
+
+    // Pointerdown funguje pro myš i dotyk
+    app.addEventListener('pointerdown', handleReaction);
+  </script>
+</body>
+</html>

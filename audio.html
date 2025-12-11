@@ -196,8 +196,14 @@
         messageEl.textContent = "Tvůj reakční čas:";
         resultEl.textContent = reactionTime.toFixed(3) + " s";
 
-        startBtn.textContent = "Spustit test znovu";
-        startBtn.style.display = "inline-block";
+// Tlačítko bude skryté...
+startBtn.style.display = "none";
+startBtn.textContent = "Spustit test znovu";
+
+// ...a ukáže se až po 0,5 s
+setTimeout(() => {
+    startBtn.style.display = "inline-block";
+}, 500);
       } else {
         // idle / done – nic
       }

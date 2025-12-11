@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <title>Reakční čas – hmatový (vibrace)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #2b2b2b;
+      color: #ffffff;
+    }
+
+    #app {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 1rem;
+    }
+
+    h1 {
+      font-size: clamp(1.6rem, 2.2vw, 2.2rem);
+      margin-bottom: 1rem;
+    }
+
+    #message {
+      font-size: clamp(1.2rem, 1.8vw, 1.8rem);
+      margin-bottom: 1.5rem;
+    }
+
+    #result {
+      font-size: clamp(1.4rem, 2.2vw, 2.2rem);
+      font-weight: bold;
+      margin-top: 0.5rem;
+    }
+
+    #startBtn {
+      font-size: clamp(1.1rem, 1.6vw, 1.6rem);
+      padding: 0.8rem 1.6rem;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      margin-top: 1.5rem;
+      background: #ffffff;
+      color: #222;
+      font-weight: 600;
+      box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.4);
+      transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.1s ease;
+      touch-action: manipulation;
+    }
+
+    #startBtn:active {
+      transform: translateY(2px);
+      box-shadow: 0 0.2rem 0.5rem rgba(0, 0, 0, 0.6);
+      background-color: #e4e4e4;
+    }
+
+    .hint {
+      margin-top: 1rem;
+      font-size: 0.95rem;
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>Měření reakčního času – vibrace</h1>
+    <div id="message">
+      Mobil drž v ruce a klikni na <strong>Spustit test</strong>.<br>
+      Až ucítíš <strong>vibraci</strong>, co nejrychleji se dotkni obrazovky.
+    </div>
+    <div id="result"></div>
+    <button id="startBtn">Spustit test</button>
+     </div>
+
+  <script>
+    const app = document.getElementById('app');
+    const messageEl = document.getElementById('message');
+    const resultEl = document.getElementById('result');
+    const startBtn = document.getElementById('startBtn');
+
+    // Stav: "idle", "waiting", "ready", "done"
+    let state = "idle";
+    let timeoutId = null;
+    let startTime = null;
+
+    function resetVisual() {
+      resultEl.textContent = "";
+      // Text ponecháme, pozadí taky – při vibraci se nic nemění.
+    }
+
+    function vibratePattern() {
+      if (navigator.vibrate) {
+        // Silnější / delší vzor vibrace
+        // např. 3 krátké pulzy
+        navigator.vibrate([200, 100, 200, 100, 200]);
+      }
+    }
+
+    function startTest() {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
+      state = "waiting";
+      resetVisual();
+
+      messageEl.innerHTML = "Čekej, až mobil <strong>zavibruje</strong>…";
+      startBtn.style.display = "none";
+
+      // Náhodné zpoždění 5–60 s
+      const minDelay = 3;    // s
+      const maxDelay = 10;   // s
+      const delayMs = (minDelay + Math.random() * (maxDelay - minDelay)) * 1000;
+
+      timeoutId = setTimeout(() => {
+        state = "ready";
+        timeoutId = null;
+        startTime = performance.now();
+        vibratePattern();
+        // Obrazovka se při vibraci NEMĚNÍ – jen hmatový podnět
+      }, delayMs);
+    }
+
+    function handleReaction(event) {
+      event.preventDefault();
+
+      if (event.target === startBtn) return;
+
+      if (state === "waiting") {
+        // Předčasný dotyk – vibrace ještě neproběhla
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        state = "idle";
+        resetVisual();
+        messageEl.innerHTML = "Příliš brzy! Mobil ještě nezavibroval.";
+        resultEl.textContent = "";
+        startBtn.textContent = "Zkusit znovu";
+        startBtn.style.display = "inline-block";
+      } else if (state === "ready") {
+        const endTime = performance.now();
+        const reactionTime = (endTime - startTime) / 1000;
+
+        state = "done";
+
+        messageEl.textContent = "Tvůj reakční čas (na vibraci):";
+        resultEl.textContent = reactionTime.toFixed(3) + " s";
+
+        startBtn.textContent = "Spustit test znovu";
+        startBtn.style.display = "inline-block";
+      } else {
+        // idle / done – nic
+      }
+    }
+
+    startBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startTest();
+    });
+
+    app.addEventListener('pointerdown', handleReaction);
+  </script>
+</body>
+</html>

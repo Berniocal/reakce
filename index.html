@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <title>Reakční doby – menu</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #2b2b2b;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 2rem;
+      font-size: 1.8rem;
+    }
+
+    .btn {
+      display: block;
+      width: 80%;
+      max-width: 320px;
+      padding: 1rem;
+      margin: 0.7rem auto;
+      background: #ffffff;
+      color: #222;
+      border-radius: 12px;
+      font-size: 1.2rem;
+      font-weight: 600;
+      text-decoration: none;
+      box-shadow: 0 0.4rem 1rem rgba(0,0,0,0.3);
+      transition: 0.15s;
+    }
+
+    .btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 0.2rem 0.5rem rgba(0,0,0,0.5);
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Testy reakční doby</h1>
+
+  <a class="btn" href="vizual.html">Vizuální podnět</a>
+  <a class="btn" href="audio.html">Zvukový podnět</a>
+  <a class="btn" href="vibration.html">Hmatový podnět (vibrace)</a>
+
+</body>
+</html>

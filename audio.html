@@ -20,6 +20,7 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #2b2b2b;
       color: #ffffff;
+      overscroll-behavior: none; /* méně „gumování“/posunů na mobilech */
     }
 
     #app {
@@ -30,6 +31,12 @@
       justify-content: center;
       text-align: center;
       padding: 1rem;
+
+      /* MAX citlivost na dotyk: zabrání zoomu/scroll gestům, která můžou „sežrat“ dotyk */
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     h1 {
@@ -61,6 +68,7 @@
       box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.4);
       transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.1s ease;
       touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
 
     #startBtn:active {
@@ -100,6 +108,9 @@
 
     let audioCtx = null;
 
+    // Zámek proti dvojímu vyhodnocení (např. pointerdown + pointerup, nebo různé pointer události)
+    let reactedThisRound = false;
+
     function resetVisual() {
       resultEl.textContent = "";
       app.style.backgroundColor = "#2b2b2b";
@@ -137,14 +148,19 @@
       osc.stop(audioCtx.currentTime + duration);
     }
 
-    function startTest() {
-      initAudio();
-
+    function clearPendingTimeout() {
       if (timeoutId !== null) {
         clearTimeout(timeoutId);
         timeoutId = null;
       }
+    }
 
+    function startTest() {
+      initAudio();
+
+      clearPendingTimeout();
+
+      reactedThisRound = false;
       state = "waiting";
       resetVisual();
 
@@ -161,29 +177,39 @@
       timeoutId = setTimeout(() => {
         state = "ready";
         timeoutId = null;
+
+        // Měření co nejpřesněji: startTime hned před pípnutím
         startTime = performance.now();
+
         playBeep();
         // ⚠ NIC NEMĚNIT NA OBRAZOVCE!
       }, delayMs);
     }
 
     function handleReaction(event) {
+      // maximum citlivosti + jistota, že se nevyvolá scroll/zoom apod.
       event.preventDefault();
 
+      // Nechceme, aby tap na tlačítko spouštěl reakci na ploše (start se řeší zvlášť)
       if (event.target === startBtn) return;
+
+      // Zámek proti dvojímu zásahu jedním dotykem (down+up nebo multi-listenery)
+      if (reactedThisRound) return;
+      reactedThisRound = true;
 
       if (state === "waiting") {
         // Klik příliš brzy
-        if (timeoutId !== null) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
+        clearPendingTimeout();
         state = "idle";
         resetVisual();
         messageEl.innerHTML = "Příliš brzy! Pípnutí ještě neznělo.";
         resultEl.textContent = "";
         startBtn.textContent = "Zkusit znovu";
         startBtn.style.display = "inline-block";
+
+        // aby šlo znovu reagovat hned po restartu
+        reactedThisRound = false;
+
       } else if (state === "ready") {
         const endTime = performance.now();
         const reactionTime = (endTime - startTime) / 1000;
@@ -202,15 +228,20 @@
         }, 500);
       } else {
         // idle / done – nic
+        reactedThisRound = false;
       }
     }
 
-    startBtn.addEventListener('click', (e) => {
+    // Start tlačítko: zastav propadnutí na app + okamžitě spustí test
+    startBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
       e.stopPropagation();
       startTest();
-    });
+    }, {passive:false});
 
-    app.addEventListener('pointerdown', handleReaction);
+    // MAX citlivost: poslouchej pointerdown (nejrychlejší) + pointerup jako fallback pro některá zařízení
+    app.addEventListener('pointerdown', handleReaction, {passive:false});
+    app.addEventListener('pointerup', handleReaction, {passive:false});
   </script>
 </body>
 </html>

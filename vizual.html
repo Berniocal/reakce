@@ -20,6 +20,7 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #2b2b2b;
       color: #ffffff;
+      overscroll-behavior: none; /* méně gumování/posunů na mobilech */
     }
 
     #app {
@@ -31,6 +32,12 @@
       text-align: center;
       transition: background-color 0.2s ease;
       padding: 1rem;
+
+      /* MAX citlivost na dotyk */
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     h1 {
@@ -62,6 +69,7 @@
       box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.4);
       transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.1s ease;
       touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
 
     #startBtn:active {
@@ -86,7 +94,6 @@
     </div>
     <div id="result"></div>
     <button id="startBtn">Spustit test</button>
-    
   </div>
 
   <script>
@@ -100,19 +107,26 @@
     let timeoutId = null;
     let startTime = null;
 
+    // Zámek proti dvojímu vyhodnocení (pointerdown + pointerup apod.)
+    let reactedThisRound = false;
+
     function resetVisual() {
       // Základní vzhled – neutrální pozadí
       app.style.backgroundColor = "#2b2b2b";
       resultEl.textContent = "";
     }
 
-    function startTest() {
-      // Zruš případný předchozí timeout
+    function clearPendingTimeout() {
       if (timeoutId !== null) {
         clearTimeout(timeoutId);
         timeoutId = null;
       }
+    }
 
+    function startTest() {
+      clearPendingTimeout();
+
+      reactedThisRound = false;
       state = "waiting";
       resetVisual();
 
@@ -122,39 +136,46 @@
       // Pozadí je nyní zelené, žák ví, že čeká
       app.style.backgroundColor = "#2ecc71";
 
-      // Náhodné zpoždění 5–15 s
-      const minDelay = 3;    // sekundy
-      const maxDelay = 10;   // sekundy
+      // Náhodné zpoždění 3–10 s
+      const minDelay = 3;    // s
+      const maxDelay = 10;   // s
       const delayMs = (minDelay + Math.random() * (maxDelay - minDelay)) * 1000;
 
       timeoutId = setTimeout(() => {
         state = "ready";
         timeoutId = null;
+
+        // startTime hned před změnou (co nejpřesnější start měření)
         startTime = performance.now();
+
         app.style.backgroundColor = "#e74c3c"; // červená
         messageEl.innerHTML = "TEĎ! Dotkni se obrazovky co nejrychleji!";
       }, delayMs);
     }
 
     function handleReaction(event) {
-      // aby se touch nezduplikoval na click
+      // aby se touch nezduplikoval / aby se neřešil scroll/zoom
       event.preventDefault();
 
       // Ignoruj klik na tlačítko start, ten se řeší zvlášť
       if (event.target === startBtn) return;
 
+      if (reactedThisRound) return;
+      reactedThisRound = true;
+
       if (state === "waiting") {
         // Klikl příliš brzy
-        if (timeoutId !== null) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
+        clearPendingTimeout();
         state = "idle";
         app.style.backgroundColor = "#2b2b2b";
         messageEl.innerHTML = "Příliš brzy! Obrazovka ještě nebyla červená.";
         resultEl.textContent = "";
         startBtn.textContent = "Zkusit znovu";
         startBtn.style.display = "inline-block";
+
+        // aby šlo hned znovu
+        reactedThisRound = false;
+
       } else if (state === "ready") {
         const endTime = performance.now();
         const reactionTime = (endTime - startTime) / 1000; // v sekundách
@@ -165,26 +186,31 @@
         messageEl.textContent = "Tvůj reakční čas:";
         resultEl.textContent = reactionTime.toFixed(3) + " s";
 
-// Tlačítko bude skryté...
-startBtn.style.display = "none";
-startBtn.textContent = "Spustit test znovu";
+        // Tlačítko bude skryté...
+        startBtn.style.display = "none";
+        startBtn.textContent = "Spustit test znovu";
 
-// ...a ukáže se až po 0,5 s
-setTimeout(() => {
-    startBtn.style.display = "inline-block";
-}, 500);
+        // ...a ukáže se až po 0,5 s
+        setTimeout(() => {
+          startBtn.style.display = "inline-block";
+        }, 500);
+
       } else {
-        // v ostatních stavech (idle/done) klik ignorujeme
+        // idle/done – nic
+        reactedThisRound = false;
       }
     }
 
-    startBtn.addEventListener('click', (e) => {
+    // Start: pointerdown je rychlejší než click a nepropadne na app
+    startBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
       e.stopPropagation();
       startTest();
-    });
+    }, {passive:false});
 
-    // Pointerdown funguje pro myš i dotyk
-    app.addEventListener('pointerdown', handleReaction);
+    // MAX citlivost: pointerdown (nejrychlejší) + pointerup jako fallback
+    app.addEventListener('pointerdown', handleReaction, {passive:false});
+    app.addEventListener('pointerup', handleReaction, {passive:false});
   </script>
 </body>
 </html>

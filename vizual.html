@@ -78,6 +78,24 @@
       background-color: #e4e4e4;
     }
 
+    #downloadHtmlBtn {
+      position: fixed;
+      top: max(10px, env(safe-area-inset-top));
+      right: max(10px, env(safe-area-inset-right));
+      z-index: 10;
+      border: 1px solid rgba(255,255,255,.35);
+      border-radius: 999px;
+      padding: .45rem .7rem;
+      background: rgba(25,25,25,.55);
+      color: rgba(255,255,255,.9);
+      font: 600 .78rem/1 system-ui, sans-serif;
+      cursor: pointer;
+      backdrop-filter: blur(5px);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #downloadHtmlBtn:hover { background: rgba(25,25,25,.75); }
+
     .hint {
       margin-top: 1rem;
       font-size: 0.95rem;
@@ -86,6 +104,9 @@
   </style>
 </head>
 <body>
+  <!-- bernio-download-html -->
+  <button id="downloadHtmlBtn" type="button" title="Stáhnout tuto aplikaci jako HTML">⬇️ Stáhnout HTML</button>
+
   <div id="app">
     <h1>Měření reakčního času</h1>
     <div id="message">
@@ -101,6 +122,7 @@
     const messageEl = document.getElementById('message');
     const resultEl = document.getElementById('result');
     const startBtn = document.getElementById('startBtn');
+    const downloadHtmlBtn = document.getElementById('downloadHtmlBtn');
 
     // Stav může být: "idle", "waiting", "ready", "done"
     let state = "idle";
@@ -200,6 +222,23 @@
         reactedThisRound = false;
       }
     }
+
+    function downloadCurrentHtml(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+      const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'reakcni-cas-vizualni.html';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
+    downloadHtmlBtn.addEventListener('pointerdown', downloadCurrentHtml, {passive:false});
 
     // Start: pointerdown je rychlejší než click a nepropadne na app
     startBtn.addEventListener('pointerdown', (e) => {

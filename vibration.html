@@ -108,6 +108,7 @@
     #app { min-height: 100%; height: auto; padding-top: 3rem; padding-bottom: 1rem; }
     @media(max-height: 450px) { #app { padding-top: 2.5rem; } #stats { margin-top: .6rem; } h1 { margin-bottom: .4rem; } #message { margin-bottom: .5rem; } }
 
+  #stats span{min-height:2.4em;display:flex;align-items:center;justify-content:center;line-height:1.15} #stats > div:nth-child(4) strong,#stats > div:nth-child(6) strong{color:#b8f5ce} #stats > div:nth-child(5) strong{color:#ffb9b2}
   </style>
 </head>
 <body>
@@ -119,10 +120,13 @@
     </div>
     <div id="result"></div>
     <button id="startBtn" type="button">Spustit test</button>
-    <div id="stats" aria-label="Statistiky platných pokusů">
+    <div id="stats" aria-label="Statistiky pokusů">
       <div><span>Průměrná doba</span><strong id="avgTime">—</strong></div>
       <div><span>Nejrychlejší doba</span><strong id="bestTime">—</strong></div>
       <div><span>Počet pokusů</span><strong id="attemptCount">0</strong></div>
+      <div><span>Správně</span><strong id="correctCount">0</strong></div>
+      <div><span>Chybně (předčasně)</span><strong id="wrongCount">0</strong></div>
+      <div><span>Správně za sebou</span><strong id="streakCount">0</strong></div>
     </div>
     <button id="resetStatsBtn" type="button">Vynulovat hodnoty</button>
   </div>
@@ -152,11 +156,16 @@
     const resetStatsBtn = document.getElementById('resetStatsBtn');
     const initialMessage = messageEl.innerHTML;
     const times = [];
+    let wrongCount = 0;
+    let streak = 0;
     let revealTimer = null;
     function renderStats() {
       const count = times.length;
       const format = seconds => seconds.toFixed(3).replace('.', ',') + ' s';
-      document.getElementById('attemptCount').textContent = count;
+      document.getElementById('attemptCount').textContent = count + wrongCount;
+      document.getElementById('correctCount').textContent = count;
+      document.getElementById('wrongCount').textContent = wrongCount;
+      document.getElementById('streakCount').textContent = streak;
       document.getElementById('avgTime').textContent = count ? format(times.reduce((sum,t)=>sum+t,0)/count) : '—';
       document.getElementById('bestTime').textContent = count ? format(times.reduce((best,t)=>Math.min(best,t),Infinity)) : '—';
     }
@@ -170,6 +179,8 @@
       reactedThisRound = false;
       startTime = null;
       times.length = 0;
+      wrongCount = 0;
+      streak = 0;
       resetVisual();
       app.style.backgroundColor = '#2b2b2b';
       if (navigator.vibrate) navigator.vibrate(0);
@@ -250,6 +261,9 @@
       reactedThisRound = true;
 
       if (state === "waiting" || (state === "ready" && pressedAt < startTime)) {
+        wrongCount++;
+        streak = 0;
+        renderStats();
         // Předčasný dotyk – vibrace ještě neproběhla
         clearPendingTimeout();
         navigator.vibrate(0);
@@ -273,6 +287,7 @@
         messageEl.textContent = "Tvůj reakční čas (na vibraci):";
         resultEl.textContent = reactionTime.toFixed(3).replace('.', ',') + " s";
         times.push(reactionTime);
+        streak++;
         renderStats();
 
         // Tlačítko skryté...

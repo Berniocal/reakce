@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="cs">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#2b2b2b"><title>Vizuální podnět s rozhodováním</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#2b2b2b;color:white;font-family:system-ui,-apple-system,sans-serif}main{max-width:580px;min-height:100vh;min-height:100dvh;margin:auto;display:flex;flex-direction:column;justify-content:center;gap:12px;text-align:center;padding:16px}h1{font-size:clamp(1.45rem,5vw,2rem);margin:4px 0}a{color:#ddd;font-size:.9rem}p{margin:0;color:#ddd;line-height:1.4}button{font:600 1rem system-ui;min-height:44px;border:0;border-radius:12px;padding:11px 15px;background:#fff;color:#222;cursor:pointer;touch-action:manipulation}button:disabled{opacity:.55;cursor:default}.secondary{background:#414141;color:#fff;border:1px solid #777}.controls{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}#arena{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}#signal{height:clamp(125px,28vh,200px);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;background:#202020;border:1px solid #555;border-radius:16px;margin-bottom:8px}#dot{width:clamp(75px,24vw,125px);aspect-ratio:1;border-radius:50%;display:none}#signal.ready #dot{display:block}#signal.ready #message{display:none}#message{padding:10px;font-size:clamp(1.1rem,4vw,1.4rem);font-weight:600}#choices{display:grid;grid-template-columns:1fr 1fr;gap:8px}.choice{height:clamp(85px,20vh,150px);font-size:clamp(1rem,5vw,1.4rem);color:white;touch-action:none}.red{background:#dc3838}.blue{background:#2678c8}#result{font-weight:700;font-size:1.4rem;min-height:1.9rem;font-variant-numeric:tabular-nums}#stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.stat{background:#202020;border:1px solid #555;border-radius:10px;padding:10px 3px;min-width:0}.stat span{display:block;font-size:clamp(.68rem,2.8vw,.85rem);color:#ddd}.stat strong{display:block;font-size:clamp(1rem,4.3vw,1.4rem);font-variant-numeric:tabular-nums;white-space:nowrap;margin-top:4px}button:focus-visible,a:focus-visible{outline:3px solid #fff;outline-offset:2px}@media(max-height:520px){main{gap:6px;padding:10px}#signal{height:100px}#dot{width:65px}.choice{height:65px}}
+</style></head>
+<body><main><a href="index.html">← Zpět do menu</a><h1>Vizuální podnět s rozhodováním</h1><p>Až se objeví barevný kruh, co nejrychleji stiskni tlačítko stejné barvy.</p>
+<div id="arena"><div id="signal"><div id="dot"></div><div id="message">Spusť test</div></div>
+<div id="choices"><button class="choice red" data-color="red" type="button">ČERVENÁ</button><button class="choice blue" data-color="blue" type="button">MODRÁ</button></div></div>
+<div id="result" aria-live="polite"></div><button id="start" type="button">Spustit test</button>
+<div id="stats"><div class="stat"><span>Průměrná doba</span><strong id="average">—</strong></div><div class="stat"><span>Nejrychlejší</span><strong id="best">—</strong></div><div class="stat"><span>Počet pokusů</span><strong id="count">0</strong></div><div class="stat"><span>Správně</span><strong id="correct">0</strong></div><div class="stat"><span>Chyby</span><strong id="wrong">0</strong></div><div class="stat"><span>Předčasně</span><strong id="early">0</strong></div></div>
+<button id="reset" class="secondary" type="button">Vynulovat hodnoty</button><p style="font-size:.85rem">Průměr a nejrychlejší čas se počítají pouze ze správných reakcí.</p>
+</main><script>
+'use strict';
+const $=id=>document.getElementById(id);
+let phase='idle',timer=0,frame=0,generation=0,target='',started=0,wrong=0,early=0;
+const times=[];
+const fmt=ms=>(ms/1000).toFixed(3).replace('.',',')+' s';
+function stats(){const n=times.length;$('average').textContent=n?fmt(times.reduce((a,b)=>a+b,0)/n):'—';$('best').textContent=n?fmt(times.reduce((a,b)=>Math.min(a,b),Infinity)):'—';$('count').textContent=n+wrong+early;$('correct').textContent=n;$('wrong').textContent=wrong;$('early').textContent=early}
+function stop(){clearTimeout(timer);cancelAnimationFrame(frame);timer=frame=0;generation++}
+function neutral(message){$('signal').className='';$('message').textContent=message;$('dot').className=''}
+function start(){if(phase==='waiting'||phase==='ready')return;stop();phase='waiting';target='';neutral('ČEKEJ');$('result').textContent='';$('start').disabled=true;const token=generation;timer=setTimeout(()=>{if(token!==generation||phase!=='waiting')return;frame=requestAnimationFrame(()=>{if(token!==generation||phase!=='waiting')return;target=Math.random()<.5?'red':'blue';$('dot').className=target;$('signal').className='ready';started=performance.now();phase='ready'})},1000+Math.random()*2000)}
+function finish(message,result){stop();phase='done';neutral(message);$('result').textContent=result;$('start').textContent='Zkusit znovu';$('start').disabled=false;stats()}
+function choose(color){if(phase==='waiting'){early++;finish('Příliš brzy!','');return}if(phase!=='ready')return;const elapsed=performance.now()-started;if(color===target){times.push(elapsed);finish('Správně!',fmt(elapsed))}else{wrong++;finish('Špatná barva',fmt(elapsed))}}
+document.querySelectorAll('.choice').forEach(el=>{el.addEventListener('pointerdown',e=>{if(e.button!==0||!e.isPrimary)return;e.preventDefault();choose(el.dataset.color)});el.addEventListener('click',e=>{if(e.detail===0)choose(el.dataset.color)})});
+$('start').addEventListener('click',start);
+$('reset').addEventListener('click',()=>{stop();phase='idle';times.length=0;wrong=early=0;neutral('Spusť test');$('result').textContent='';$('start').disabled=false;$('start').textContent='Spustit test';stats()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&(phase==='waiting'||phase==='ready')){stop();phase='idle';neutral('Měření přerušeno');$('result').textContent='';$('start').disabled=false;$('start').textContent='Spustit test'}});
+stats();
+</script></body></html>

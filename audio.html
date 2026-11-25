@@ -160,8 +160,19 @@
     let state = "idle";
     let timeoutId = null;
     let startTime = null;
+    let stimulusFrame = null;
+    // Use the timestamp of the actual pointer-down event, not the time at
+    // which the main thread eventually handles it.
+    function inputTime(event) {
+      const now = performance.now();
+      let t = event.timeStamp;
+      if (t > 1e12) t -= performance.timeOrigin;
+      return Number.isFinite(t) && t > 0 && t <= now + 1 ? Math.min(t, now) : now;
+    }
 
     let audioCtx = null;
+    let activeOsc = null;
+    function stopBeep() { if (activeOsc) { try { activeOsc.stop(); } catch (_) {} activeOsc = null; } }
 
     // Zámek proti dvojímu vyhodnocení (např. pointerdown + pointerup, nebo různé pointer události)
     let reactedThisRound = false;
@@ -211,31 +222,50 @@
         }
       }
       if (audioCtx && audioCtx.state === "suspended") {
-        audioCtx.resume();
+        audioCtx.resume().catch(() => {});
       }
     }
 
     function playBeep() {
-      if (!audioCtx) return;
-      const duration = 0.25; // s
+      if (!audioCtx || audioCtx.state !== 'running') return null;
+      stopBeep();
+      const duration = 0.25;
       const osc = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
-
-      osc.frequency.value = 1000; // 1 kHz
+      osc.frequency.value = 1000;
       osc.type = "square";
-
-      gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.4, audioCtx.currentTime + 0.01);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
-
       osc.connect(gainNode);
       gainNode.connect(audioCtx.destination);
-
-      osc.start();
-      osc.stop(audioCtx.currentTime + duration);
+      const when = audioCtx.currentTime + 0.035;
+      gainNode.gain.setValueAtTime(0.0001, when);
+      gainNode.gain.exponentialRampToValueAtTime(0.4, when + 0.002);
+      gainNode.gain.setValueAtTime(0.4, when + 0.025);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+      // Map the scheduled audio sample to the estimated output-device time.
+      // Do not subtract arbitrary fixed offsets from measured reactions.
+      const now = performance.now();
+      const contextNow = audioCtx.currentTime;
+      let onset = now + (when - contextNow + (audioCtx.baseLatency || 0) + (audioCtx.outputLatency || 0)) * 1000;
+      if (typeof audioCtx.getOutputTimestamp === 'function') {
+        const stamp = audioCtx.getOutputTimestamp();
+        if (stamp.performanceTime > 0 && Number.isFinite(stamp.contextTime)) {
+          const estimate = stamp.performanceTime + (when - stamp.contextTime) * 1000;
+          if (Number.isFinite(estimate) && estimate >= now - 20 && estimate <= now + 2000) onset = estimate;
+        }
+      }
+      activeOsc = osc;
+      osc.onended = () => { if (activeOsc === osc) activeOsc = null; osc.disconnect(); gainNode.disconnect(); };
+      osc.start(when);
+      osc.stop(when + duration);
+      return onset;
     }
 
     function clearPendingTimeout() {
+      stopBeep();
+      if (stimulusFrame !== null) {
+        cancelAnimationFrame(stimulusFrame);
+        stimulusFrame = null;
+      }
       if (timeoutId !== null) {
         clearTimeout(timeoutId);
         timeoutId = null;
@@ -243,6 +273,7 @@
     }
 
     function startTest() {
+      if (state === 'waiting' || state === 'ready') return;
       clearRevealTimer();
       initAudio();
 
@@ -263,29 +294,34 @@
       const delayMs = (minDelay + Math.random() * (maxDelay - minDelay)) * 1000;
 
       timeoutId = setTimeout(() => {
-        state = "ready";
         timeoutId = null;
-
-        // Měření co nejpřesněji: startTime hned před pípnutím
-        startTime = performance.now();
-
-        playBeep();
-        // ⚠ NIC NEMĚNIT NA OBRAZOVCE!
+        if (state !== 'waiting') return;
+        startTime = playBeep();
+        if (startTime === null) {
+          state = 'idle';
+          messageEl.textContent = 'Zvuk není dostupný. Zkus spustit test znovu.';
+          startBtn.textContent = 'Zkusit znovu';
+          startBtn.style.display = 'inline-block';
+          return;
+        }
+        state = "ready";
+        // Žádná změna obrazovky v okamžiku zvukového podnětu.
       }, delayMs);
     }
 
     function handleReaction(event) {
       // maximum citlivosti + jistota, že se nevyvolá scroll/zoom apod.
+      const pressedAt = inputTime(event);
       event.preventDefault();
 
       // Nechceme, aby tap na tlačítko spouštěl reakci na ploše (start se řeší zvlášť)
-      if (event.target.closest('button') || !event.isPrimary || event.button !== 0) return;
+      if (event.target.closest('button') || event.button !== 0) return;
 
       // Zámek proti dvojímu zásahu jedním dotykem (down+up nebo multi-listenery)
       if (reactedThisRound) return;
       reactedThisRound = true;
 
-      if (state === "waiting") {
+      if (state === "waiting" || (state === "ready" && pressedAt < startTime)) {
         // Klik příliš brzy
         clearPendingTimeout();
         state = "idle";
@@ -299,7 +335,7 @@
         reactedThisRound = false;
 
       } else if (state === "ready") {
-        const endTime = performance.now();
+        const endTime = pressedAt;
         const reactionTime = (endTime - startTime) / 1000;
 
         state = "done";
@@ -352,6 +388,20 @@
     // Měření při stisku, nikoli při uvolnění prstu; jeden platný výsledek na pokus.
     startBtn.addEventListener('click', e => { if (e.detail === 0) startTest(); });
     app.addEventListener('pointerdown', handleReaction, {passive:false});
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && (state === 'waiting' || state === 'ready')) {
+        clearPendingTimeout();
+        clearRevealTimer();
+        stopBeep();
+        state = 'idle';
+        reactedThisRound = false;
+        startTime = null;
+        resetVisual();
+        messageEl.textContent = 'Měření přerušeno. Zkus to znovu.';
+        startBtn.textContent = 'Zkusit znovu';
+        startBtn.style.display = 'inline-block';
+      }
+    });
 
   </script>
 </body>

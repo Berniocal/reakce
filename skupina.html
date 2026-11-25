@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#2b2b2b"><title>Skupinová reakční doba</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:system-ui,-apple-system,sans-serif;background:#2b2b2b;color:#fff}body{overscroll-behavior:none}main{max-width:560px;margin:auto;padding:20px 16px 32px;text-align:center}h1{font-size:clamp(1.5rem,5vw,2rem);margin:18px 0}h2{font-size:1.2rem;margin:16px 0 10px}p{line-height:1.5;color:#ddd}a{color:#ddd}button{border:0;border-radius:12px;background:#fff;color:#222;font:600 1rem system-ui;padding:12px 16px;min-height:44px;cursor:pointer;touch-action:manipulation}button:active{transform:translateY(2px)}button.secondary{background:#454545;color:white;border:1px solid #666}button:disabled{opacity:.45;cursor:default}button.wide{width:100%;margin:6px 0}.person{display:flex;gap:8px;margin:8px 0}.person input{flex:1;min-width:0;background:#202020;color:#fff;border:1px solid #777;border-radius:10px;font:inherit;padding:12px}.person button{width:44px;padding:0;font-size:1.4rem}.row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}.muted{font-size:.9rem;color:#bbb}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:16px 0}.stat{border:1px solid #666;border-radius:12px;background:#202020;padding:12px 4px}.stat span{display:block;font-size:clamp(.69rem,2.7vw,.88rem);color:#ccc}.stat strong{display:block;font-size:clamp(1.05rem,4.8vw,1.7rem);margin-top:5px;font-variant-numeric:tabular-nums}#roundMean{font-size:clamp(2.2rem,12vw,4rem);font-weight:700;font-variant-numeric:tabular-nums}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{padding:10px 5px;border-bottom:1px solid #555;text-align:right;overflow-wrap:anywhere}th{font-size:.8rem;color:#bbb}th:first-child,td:first-child{text-align:left}td{font-variant-numeric:tabular-nums}#arena{position:fixed;inset:0;z-index:10;background:#292929;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:24px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}#arena[hidden],section[hidden]{display:none}#arena.ready{background:#e74c3c;color:#fff}#arena.early{background:#784527}#arenaTitle{font-size:clamp(2.3rem,12vw,6rem);font-weight:800;max-width:100%;overflow-wrap:anywhere;line-height:1.1}#arenaHint{font-size:clamp(1rem,4vw,1.6rem);margin-top:16px;color:inherit}#progress{position:absolute;top:max(16px,env(safe-area-inset-top));left:15px;font-variant-numeric:tabular-nums;color:inherit}#cancel{position:absolute;top:max(12px,env(safe-area-inset-top));right:12px;background:#ffffff22;color:white;border:1px solid #ffffff60;font-size:.8rem;min-height:40px}#error{color:#ffb5a7;min-height:1.4em}button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #b6e4ff;outline-offset:2px}
+</style></head><body><main>
+<a href="index.html">← Zpět do menu</a><h1>Skupinová reakční doba</h1>
+<section id="setup"><p>Postavte se kolem telefonu. Až se na obrazovce objeví jméno, co nejrychleji se jí dotkne pouze vyvolaný účastník.</p>
+<h2>Účastníci</h2><div id="names"></div><button id="add" class="secondary wide" type="button">＋ Přidat účastníka</button><p id="error" role="alert"></p><button id="start" class="wide" type="button">Spustit týmový test</button><p class="muted">Každý bude vyvolán právě jednou za kolo, v náhodném pořadí. Pokud někdo klepne před zobrazením jména, pokus se opakuje.</p></section>
+<section id="results" hidden><h2 id="roundLabel"></h2><div class="muted">Průměrná reakční doba týmu v tomto kole</div><div id="roundMean"></div>
+<div class="stats"><div class="stat"><span>Průměr všech kol</span><strong id="avg">—</strong></div><div class="stat"><span>Nejlepší kolo</span><strong id="best">—</strong></div><div class="stat"><span>Počet kol</span><strong id="count">0</strong></div></div>
+<table><thead><tr><th>Účastník</th><th>Poslední kolo</th><th>Průměr</th></tr></thead><tbody id="individual"></tbody></table>
+<div style="margin-top:16px"><button id="again" class="wide" type="button">Spustit další kolo</button><div class="row"><button id="reset" class="secondary" type="button">Vynulovat výsledky</button><button id="edit" class="secondary" type="button">Upravit účastníky</button></div></div></section>
+</main>
+<div id="arena" hidden><div id="progress"></div><button id="cancel" type="button">Ukončit kolo</button><div id="arenaTitle"></div><div id="arenaHint"></div></div>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const names=$('names'),arena=$('arena'),title=$('arenaTitle'),hint=$('arenaHint');
+let participants=[],rounds=[],order=[],current=[],index=0,phase='idle',timer=0,frame=0,started=0,generation=0;
+const format=ms=>(ms/1000).toFixed(3).replace('.',',')+' s';
+const mean=values=>values.reduce((sum,x)=>sum+x,0)/values.length;
+function addName(value=''){
+ const row=document.createElement('div');row.className='person';
+ const input=document.createElement('input');input.type='text';input.placeholder='Jméno účastníka';input.maxLength=35;input.value=value;input.autocomplete='off';
+ const del=document.createElement('button');del.type='button';del.className='secondary';del.textContent='×';del.setAttribute('aria-label','Odebrat účastníka');del.onclick=()=>{row.remove();if(!names.children.length)addName();};
+ row.append(input,del);names.append(row);return input;
+}
+for(let i=0;i<3;i++)addName();
+$('add').onclick=()=>addName().focus();
+function stopPending(){clearTimeout(timer);cancelAnimationFrame(frame);timer=0;frame=0;generation++}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function beginRound(){stopPending();order=shuffle(participants.map((_,i)=>i));current=new Array(participants.length);index=0;$('setup').hidden=true;$('results').hidden=true;arena.hidden=false;wait()}
+function wait(){stopPending();phase='waiting';arena.className='';title.textContent='ČEKEJTE';hint.textContent='Kdo bude na řadě?';$('progress').textContent='Kolo '+(rounds.length+1)+' · '+(index+1)+' / '+participants.length;
+ const token=generation;timer=setTimeout(()=>{if(token!==generation||phase!=='waiting')return;
+ frame=requestAnimationFrame(()=>{if(token!==generation||phase!=='waiting')return;title.textContent=participants[order[index]];hint.textContent='TEĎ!';arena.className='ready';started=performance.now();phase='ready';});
+ },1400+Math.random()*2200);
+}
+function showResults(){stopPending();phase='idle';arena.hidden=true;$('setup').hidden=true;$('results').hidden=false;const last=rounds[rounds.length-1],roundMeans=rounds.map(mean);$('roundLabel').textContent='Výsledek '+rounds.length+'. kola';$('roundMean').textContent=format(mean(last));$('avg').textContent=format(mean(roundMeans));$('best').textContent=format(Math.min(...roundMeans));$('count').textContent=rounds.length;
+ const tbody=$('individual');tbody.replaceChildren();participants.forEach((name,i)=>{const row=document.createElement('tr');for(const v of [name,format(last[i]),format(mean(rounds.map(r=>r[i])))]){const td=document.createElement('td');td.textContent=v;row.append(td)}tbody.append(row)});
+}
+arena.addEventListener('pointerdown',e=>{if(e.target.closest('button')||!e.isPrimary||e.button!==0)return;e.preventDefault();if(phase==='waiting'){stopPending();phase='early';arena.className='early';title.textContent='Příliš brzy!';hint.textContent='Pokus se bude opakovat.';timer=setTimeout(wait,950);return}
+ if(phase!=='ready')return;
+ const elapsed=performance.now()-started;phase='between';current[order[index]]=elapsed;arena.className='';title.textContent=format(elapsed);hint.textContent='Připravte se na další jméno';index++;
+ if(index===order.length){rounds.push(current.slice());hint.textContent='Kolo dokončeno';timer=setTimeout(showResults,500)}else{timer=setTimeout(wait,650)}
+},{passive:false});
+function backToSetup(){stopPending();phase='idle';arena.hidden=true;$('results').hidden=true;$('setup').hidden=false;}
+$('cancel').onclick=()=>{if(rounds.length)showResults();else backToSetup()};
+$('start').onclick=()=>{const values=[...names.querySelectorAll('input')].map(x=>x.value.trim()).filter(Boolean);if(values.length<2){$('error').textContent='Zadejte alespoň dvě jména.';return}if(new Set(values.map(v=>v.toLocaleLowerCase('cs'))).size!==values.length){$('error').textContent='Použijte různá jména nebo přezdívky.';return}participants=values;rounds=[];$('error').textContent='';beginRound()};
+$('again').onclick=beginRound;
+$('reset').onclick=()=>{rounds=[];backToSetup()};
+$('edit').onclick=()=>{if(confirm('Úpravou účastníků se vynulují dosavadní výsledky. Pokračovat?')){rounds=[];backToSetup()}};
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&!arena.hidden){if(rounds.length)showResults();else backToSetup()}});
+</script></body></html>

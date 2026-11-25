@@ -137,6 +137,15 @@
     let state = "idle";
     let timeoutId = null;
     let startTime = null;
+    let stimulusFrame = null;
+    // Use the timestamp of the actual pointer-down event, not the time at
+    // which the main thread eventually handles it.
+    function inputTime(event) {
+      const now = performance.now();
+      let t = event.timeStamp;
+      if (t > 1e12) t -= performance.timeOrigin;
+      return Number.isFinite(t) && t > 0 && t <= now + 1 ? Math.min(t, now) : now;
+    }
 
     // Zámek proti dvojímu vyhodnocení (pointerdown + pointerup apod.)
     let reactedThisRound = false;
@@ -179,13 +188,14 @@
     }
 
     function vibratePattern() {
-      if (navigator.vibrate) {
-        // výraznější vzor (víc pulzů) – hmatově jasnější
-        navigator.vibrate([200, 80, 200, 80, 200]);
-      }
+      return typeof navigator.vibrate === 'function' && navigator.vibrate(200);
     }
 
     function clearPendingTimeout() {
+      if (stimulusFrame !== null) {
+        cancelAnimationFrame(stimulusFrame);
+        stimulusFrame = null;
+      }
       if (timeoutId !== null) {
         clearTimeout(timeoutId);
         timeoutId = null;
@@ -193,6 +203,7 @@
     }
 
     function startTest() {
+      if (state === 'waiting' || state === 'ready') return;
       clearRevealTimer();
       clearPendingTimeout();
       if (typeof navigator.vibrate !== 'function') {
@@ -218,22 +229,30 @@
 
         // startTime hned před vibrací
         startTime = performance.now();
-        vibratePattern();
+        if (!vibratePattern()) {
+          state = 'idle';
+          startTime = null;
+          messageEl.textContent = 'Vibrace nebyla spuštěna. Zkontroluj podporu zařízení.';
+          startBtn.textContent = 'Zkusit znovu';
+          startBtn.style.display = 'inline-block';
+        }
         // Obrazovka se při vibraci NEMĚNÍ – jen hmatový podnět
       }, delayMs);
     }
 
     function handleReaction(event) {
+      const pressedAt = inputTime(event);
       event.preventDefault();
 
-      if (event.target.closest('button') || !event.isPrimary || event.button !== 0) return;
+      if (event.target.closest('button') || event.button !== 0) return;
 
       if (reactedThisRound) return;
       reactedThisRound = true;
 
-      if (state === "waiting") {
+      if (state === "waiting" || (state === "ready" && pressedAt < startTime)) {
         // Předčasný dotyk – vibrace ještě neproběhla
         clearPendingTimeout();
+        navigator.vibrate(0);
         state = "idle";
         resetVisual();
         messageEl.innerHTML = "Příliš brzy! Mobil ještě nezavibroval.";
@@ -245,10 +264,11 @@
         reactedThisRound = false;
 
       } else if (state === "ready") {
-        const endTime = performance.now();
+        const endTime = pressedAt;
         const reactionTime = (endTime - startTime) / 1000;
 
         state = "done";
+        navigator.vibrate(0);
 
         messageEl.textContent = "Tvůj reakční čas (na vibraci):";
         resultEl.textContent = reactionTime.toFixed(3).replace('.', ',') + " s";
@@ -281,6 +301,20 @@
     // Měření při stisku, nikoli při uvolnění prstu; jeden platný výsledek na pokus.
     startBtn.addEventListener('click', e => { if (e.detail === 0) startTest(); });
     app.addEventListener('pointerdown', handleReaction, {passive:false});
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && (state === 'waiting' || state === 'ready')) {
+        clearPendingTimeout();
+        clearRevealTimer();
+        if (navigator.vibrate) navigator.vibrate(0);
+        state = 'idle';
+        reactedThisRound = false;
+        startTime = null;
+        resetVisual();
+        messageEl.textContent = 'Měření přerušeno. Zkus to znovu.';
+        startBtn.textContent = 'Zkusit znovu';
+        startBtn.style.display = 'inline-block';
+      }
+    });
 
   </script>
 </body>

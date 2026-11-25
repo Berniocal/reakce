@@ -223,9 +223,9 @@
       // Pozadí je nyní zelené, žák ví, že čeká
       app.style.backgroundColor = "#2ecc71";
 
-      // Náhodné zpoždění 3–10 s
-      const minDelay = 3;    // s
-      const maxDelay = 10;   // s
+      // Náhodné zpoždění 1–3 s
+      const minDelay = 1;    // s
+      const maxDelay = 3;   // s
       const delayMs = (minDelay + Math.random() * (maxDelay - minDelay)) * 1000;
 
       timeoutId = setTimeout(() => {

@@ -8,15 +8,16 @@
 <div id="arena"><div id="signal"><div id="dot"></div><div id="message">Spusť test</div></div>
 <div id="choices"><button class="choice red" data-color="red" type="button">ČERVENÁ</button><button class="choice blue" data-color="blue" type="button">MODRÁ</button></div></div>
 <div id="result" aria-live="polite">Poslední reakce: —</div><div class="controls"><button id="start" type="button">Spustit test</button><button id="reset" class="secondary" type="button">Vynulovat hodnoty</button></div>
-<div id="stats"><div class="stat"><span>Průměrná reakční doba</span><strong id="average">—</strong></div><div class="stat"><span>Nejrychlejší reakční doba</span><strong id="best">—</strong></div><div class="stat"><span>Počet pokusů</span><strong id="count">0</strong></div><div class="stat"><span>Správně</span><strong id="correct">0</strong></div><div class="stat"><span>Chyby</span><strong id="wrong">0</strong></div><div class="stat"><span>Předčasně</span><strong id="early">0</strong></div></div>
+<div id="stats"><div class="stat"><span>Průměrná reakční doba</span><strong id="average">—</strong></div><div class="stat"><span>Nejrychlejší reakční doba</span><strong id="best">—</strong></div><div class="stat"><span>Počet pokusů</span><strong id="count">0</strong></div><div class="stat"><span>Správně</span><strong id="correct">0</strong></div><div class="stat"><span>Špatná barva</span><strong id="wrong">0</strong></div><div class="stat"><span>Předčasně</span><strong id="early">0</strong></div><div class="stat"><span>Chybně celkem</span><strong id="totalWrong">0</strong></div><div class="stat"><span>Správně za sebou</span><strong id="streak">0</strong></div></div>
 <p style="font-size:.85rem">Průměr a nejrychlejší čas se počítají pouze ze správných reakcí.</p>
 </main><script>
 'use strict';
 const $=id=>document.getElementById(id);
 let phase='idle',timer=0,frame=0,generation=0,target='',started=0,wrong=0,early=0;
 const times=[];
+let streak=0;
 const fmt=ms=>(ms/1000).toFixed(3).replace('.',',')+' s';
-function stats(){const n=times.length;$('average').textContent=n?fmt(times.reduce((a,b)=>a+b,0)/n):'—';$('best').textContent=n?fmt(times.reduce((a,b)=>Math.min(a,b),Infinity)):'—';$('count').textContent=n+wrong+early;$('correct').textContent=n;$('wrong').textContent=wrong;$('early').textContent=early}
+function stats(){const n=times.length;$('average').textContent=n?fmt(times.reduce((a,b)=>a+b,0)/n):'—';$('best').textContent=n?fmt(times.reduce((a,b)=>Math.min(a,b),Infinity)):'—';$('count').textContent=n+wrong+early;$('correct').textContent=n;$('wrong').textContent=wrong;$('early').textContent=early;$('totalWrong').textContent=wrong+early;$('streak').textContent=streak}
 function stop(){clearTimeout(timer);cancelAnimationFrame(frame);timer=frame=0;generation++}
 function neutral(message){$('signal').className='';$('message').textContent=message;$('dot').className=''}
 function start(){if(phase==='waiting'||phase==='ready')return;stop();phase='waiting';target='';neutral('ČEKEJ');$('result').textContent='Poslední reakce: —';$('start').disabled=true;const token=generation;timer=setTimeout(()=>{if(token!==generation||phase!=='waiting')return;frame=requestAnimationFrame(()=>{if(token!==generation||phase!=='waiting')return;target=Math.random()<.5?'red':'blue';$('dot').className=target;$('signal').className='ready';started=performance.now();phase='ready'})},1000+Math.random()*2000)}
@@ -30,15 +31,15 @@ function inputTime(event){
  return Number.isFinite(t)&&t>0&&t<=now+1?Math.min(t,now):now;
 }
 function choose(color,pressedAt){
- if(phase==='waiting'||(phase==='ready'&&pressedAt<started)){early++;finish('Příliš brzy!','');return}
+ if(phase==='waiting'||(phase==='ready'&&pressedAt<started)){early++;streak=0;finish('Příliš brzy!','');return}
  if(phase!=='ready')return;
  const elapsed=pressedAt-started;
- if(color===target){times.push(elapsed);finish('Správně!',fmt(elapsed))}
- else{wrong++;finish('Špatná barva',fmt(elapsed))}
+ if(color===target){times.push(elapsed);streak++;finish('Správně!',fmt(elapsed))}
+ else{wrong++;streak=0;finish('Špatná barva',fmt(elapsed))}
 }
 document.querySelectorAll('.choice').forEach(el=>{el.addEventListener('pointerdown',e=>{if(e.button!==0||!e.isPrimary)return;const pressedAt=inputTime(e);e.preventDefault();choose(el.dataset.color,pressedAt)});el.addEventListener('click',e=>{if(e.detail===0)choose(el.dataset.color,inputTime(e))})});
 $('start').addEventListener('click',start);
-$('reset').addEventListener('click',()=>{stop();phase='idle';times.length=0;wrong=early=0;neutral('Spusť test');$('result').textContent='Poslední reakce: —';$('start').disabled=false;$('start').textContent='Spustit test';stats()});
+$('reset').addEventListener('click',()=>{stop();phase='idle';times.length=0;wrong=early=streak=0;neutral('Spusť test');$('result').textContent='Poslední reakce: —';$('start').disabled=false;$('start').textContent='Spustit test';stats()});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&(phase==='waiting'||phase==='ready')){stop();phase='idle';neutral('Měření přerušeno');$('result').textContent='Poslední reakce: —';$('start').disabled=false;$('start').textContent='Spustit test'}});
 stats();
 </script></body></html>

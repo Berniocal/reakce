@@ -5,13 +5,13 @@
 </style></head><body><main>
 <a href="index.html">← Zpět do menu</a><h1>Skupinová reakční doba</h1>
 <section id="setup"><p>Postavte se kolem telefonu. Až se na obrazovce objeví jméno, co nejrychleji se jí dotkne pouze vyvolaný účastník.</p>
-<h2>Účastníci</h2><div id="names"></div><button id="add" class="secondary wide" type="button">＋ Přidat účastníka</button><p id="error" role="alert"></p><button id="start" class="wide" type="button">Spustit týmový test</button><p class="muted">Jména se střídají automaticky v náhodném pořadí. Každý účastník je vyvolán jednou v každém kole, kola ale plynule navazují. Test ukončíte tlačítkem Stop.</p></section>
-<section id="results" hidden><h2 id="roundLabel"></h2><div class="muted">Průměrná reakční doba celého týmu</div><div id="roundMean"></div>
-<div class="stats"><div class="stat"><span>Počet měření</span><strong id="avg">—</strong></div><div class="stat"><span>Nejlepší celé kolo</span><strong id="best">—</strong></div><div class="stat"><span>Dokončená kola</span><strong id="count">0</strong></div></div>
-<table><thead><tr><th>Účastník</th><th>Poslední reakce</th><th>Průměr</th></tr></thead><tbody id="individual"></tbody></table>
-<div style="margin-top:16px"><button id="again" class="wide" type="button">Pokračovat v měření</button><div class="row"><button id="reset" class="secondary" type="button">Vynulovat výsledky</button><button id="edit" class="secondary" type="button">Upravit účastníky</button></div></div></section>
+<h2>Účastníci</h2><div id="names"></div><button id="add" class="secondary wide" type="button">＋ Přidat účastníka</button><p id="error" role="alert"></p><button id="start" class="wide" type="button">Spustit týmový test</button><p class="muted">Jména se střídají automaticky v náhodném pořadí. Jakmile se všichni jednou vystřídají, zobrazí se výsledky týmu. Potom můžete spustit další kolo.</p></section>
+<section id="results" hidden><h2 id="roundLabel"></h2><div class="muted">Průměrná reakční doba týmu v tomto kole</div><div id="roundMean"></div>
+<div class="stats"><div class="stat"><span>Průměr všech kol</span><strong id="avg">—</strong></div><div class="stat"><span>Nejlepší kolo</span><strong id="best">—</strong></div><div class="stat"><span>Dokončená kola</span><strong id="count">0</strong></div></div>
+<table><thead><tr><th>Účastník</th><th>Toto kolo</th><th>Průměr</th></tr></thead><tbody id="individual"></tbody></table>
+<div style="margin-top:16px"><button id="again" class="wide" type="button">Spustit další kolo</button><div class="row"><button id="reset" class="secondary" type="button">Vynulovat výsledky</button><button id="edit" class="secondary" type="button">Upravit účastníky</button></div></div></section>
 </main>
-<div id="arena" hidden><button id="cancel" type="button">Stop</button><div id="arenaTitle"></div><div id="arenaHint"></div></div>
+<div id="arena" hidden><button id="cancel" type="button">Zrušit kolo</button><div id="arenaTitle"></div><div id="arenaHint"></div></div>
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
@@ -30,28 +30,29 @@ $('add').onclick=()=>addName().focus();
 function stopPending(){clearTimeout(timer);cancelAnimationFrame(frame);timer=0;frame=0;generation++}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function newRound(){order=shuffle(participants.map((_,i)=>i));current=new Array(participants.length);index=0}
-function beginRound(){stopPending();if(!order.length||index>=order.length)newRound();$('setup').hidden=true;$('results').hidden=true;arena.hidden=false;wait()}
+function beginRound(){stopPending();newRound();$('setup').hidden=true;$('results').hidden=true;arena.hidden=false;wait()}
 function wait(){stopPending();phase='waiting';arena.className='';title.textContent='ČEKEJTE';hint.textContent='';
  const token=generation;timer=setTimeout(()=>{if(token!==generation||phase!=='waiting')return;
  frame=requestAnimationFrame(()=>{if(token!==generation||phase!=='waiting')return;title.textContent=participants[order[index]];hint.textContent='';arena.className='ready';started=performance.now();phase='ready';});
  },1000+Math.random()*2600);
 }
 function showResults(){stopPending();phase='idle';arena.hidden=true;$('setup').hidden=true;$('results').hidden=false;
- const partial=current.filter(Number.isFinite),all=rounds.flat().concat(partial),roundMeans=rounds.map(mean);
- $('roundLabel').textContent='Výsledky týmu';$('roundMean').textContent=all.length?format(mean(all)):'—';$('avg').textContent=all.length;$('best').textContent=roundMeans.length?format(Math.min(...roundMeans)):'—';$('count').textContent=rounds.length;
- const tbody=$('individual');tbody.replaceChildren();participants.forEach((name,i)=>{const values=rounds.map(r=>r[i]);if(Number.isFinite(current[i]))values.push(current[i]);const row=document.createElement('tr');for(const v of [name,values.length?format(values[values.length-1]):'—',values.length?format(mean(values)):'—']){const td=document.createElement('td');td.textContent=v;row.append(td)}tbody.append(row)});
+ const last=rounds[rounds.length-1],roundMeans=rounds.map(mean);
+ $('roundLabel').textContent=last?'Výsledky '+rounds.length+'. kola':'Výsledky týmu';$('roundMean').textContent=last?format(mean(last)):'—';$('avg').textContent=roundMeans.length?format(mean(roundMeans)):'—';$('best').textContent=roundMeans.length?format(Math.min(...roundMeans)):'—';$('count').textContent=rounds.length;
+ const tbody=$('individual');tbody.replaceChildren();participants.forEach((name,i)=>{const values=rounds.map(r=>r[i]);const row=document.createElement('tr');for(const v of [name,last?format(last[i]):'—',values.length?format(mean(values)):'—']){const td=document.createElement('td');td.textContent=v;row.append(td)}tbody.append(row)});
 }
 arena.addEventListener('pointerdown',e=>{if(e.target.closest('button')||!e.isPrimary||e.button!==0)return;e.preventDefault();if(phase==='waiting'){stopPending();phase='early';arena.className='early';title.textContent='Příliš brzy!';hint.textContent='Pokus se bude opakovat.';timer=setTimeout(wait,950);return}
  if(phase!=='ready')return;
  const elapsed=performance.now()-started;phase='between';current[order[index]]=elapsed;index++;
- if(index===order.length){rounds.push(current.slice());newRound()}
+ if(index===order.length){rounds.push(current.slice());showResults();return}
  wait();
 },{passive:false});
 function backToSetup(){stopPending();phase='idle';arena.hidden=true;$('results').hidden=true;$('setup').hidden=false;}
-$('cancel').onclick=showResults;
+function cancelRound(){stopPending();order=[];current=[];index=0;if(rounds.length)showResults();else backToSetup()}
+$('cancel').onclick=cancelRound;
 $('start').onclick=()=>{const values=[...names.querySelectorAll('input')].map(x=>x.value.trim()).filter(Boolean);if(values.length<2){$('error').textContent='Zadejte alespoň dvě jména.';return}if(new Set(values.map(v=>v.toLocaleLowerCase('cs'))).size!==values.length){$('error').textContent='Použijte různá jména nebo přezdívky.';return}participants=values;rounds=[];order=[];current=[];index=0;$('error').textContent='';beginRound()};
 $('again').onclick=beginRound;
 $('reset').onclick=()=>{rounds=[];order=[];current=[];index=0;showResults()};
 $('edit').onclick=()=>{if(confirm('Úpravou účastníků se vynulují dosavadní výsledky. Pokračovat?')){rounds=[];order=[];current=[];index=0;backToSetup()}};
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&!arena.hidden)showResults()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&!arena.hidden)cancelRound()});
 </script></body></html>

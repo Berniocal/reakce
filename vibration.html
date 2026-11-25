@@ -82,6 +82,32 @@
       font-size: 0.95rem;
       opacity: 0.9;
     }
+  
+    #stats {
+      width: min(100%, 520px);
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: .45rem;
+      margin-top: 1.4rem;
+      font-variant-numeric: tabular-nums;
+    }
+    #stats > div {
+      border: 1px solid rgba(255,255,255,.24);
+      background: rgba(0,0,0,.22);
+      border-radius: 12px;
+      padding: .65rem .25rem;
+      min-width: 0;
+    }
+    #stats span { display: block; font-size: clamp(.69rem, 2.7vw, .9rem); }
+    #stats strong { display: block; font-size: clamp(1.05rem, 4.4vw, 1.6rem); margin-top: .25rem; white-space: nowrap; }
+    #resetStatsBtn {
+      margin-top: .75rem; padding: .6rem 1rem; border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.45); background: rgba(0,0,0,.25);
+      color: white; font: inherit; cursor: pointer; touch-action: manipulation;
+    }
+    #app { min-height: 100%; height: auto; padding-top: 3rem; padding-bottom: 1rem; }
+    @media(max-height: 450px) { #app { padding-top: 2.5rem; } #stats { margin-top: .6rem; } h1 { margin-bottom: .4rem; } #message { margin-bottom: .5rem; } }
+
   </style>
 </head>
 <body>
@@ -92,7 +118,13 @@
       Až ucítíš <strong>vibraci</strong>, co nejrychleji se dotkni obrazovky.
     </div>
     <div id="result"></div>
-    <button id="startBtn">Spustit test</button>
+    <button id="startBtn" type="button">Spustit test</button>
+    <div id="stats" aria-label="Statistiky platných pokusů">
+      <div><span>Průměrná doba</span><strong id="avgTime">—</strong></div>
+      <div><span>Nejrychlejší doba</span><strong id="bestTime">—</strong></div>
+      <div><span>Počet pokusů</span><strong id="attemptCount">0</strong></div>
+    </div>
+    <button id="resetStatsBtn" type="button">Vynulovat hodnoty</button>
   </div>
 
   <script>
@@ -108,6 +140,38 @@
 
     // Zámek proti dvojímu vyhodnocení (pointerdown + pointerup apod.)
     let reactedThisRound = false;
+    const resetStatsBtn = document.getElementById('resetStatsBtn');
+    const initialMessage = messageEl.innerHTML;
+    const times = [];
+    let revealTimer = null;
+    function renderStats() {
+      const count = times.length;
+      const format = seconds => seconds.toFixed(3).replace('.', ',') + ' s';
+      document.getElementById('attemptCount').textContent = count;
+      document.getElementById('avgTime').textContent = count ? format(times.reduce((sum,t)=>sum+t,0)/count) : '—';
+      document.getElementById('bestTime').textContent = count ? format(times.reduce((best,t)=>Math.min(best,t),Infinity)) : '—';
+    }
+    function clearRevealTimer() {
+      if (revealTimer !== null) { clearTimeout(revealTimer); revealTimer = null; }
+    }
+    function resetStats() {
+      clearPendingTimeout();
+      clearRevealTimer();
+      state = 'idle';
+      reactedThisRound = false;
+      startTime = null;
+      times.length = 0;
+      resetVisual();
+      app.style.backgroundColor = '#2b2b2b';
+      if (navigator.vibrate) navigator.vibrate(0);
+      messageEl.innerHTML = initialMessage;
+      startBtn.textContent = 'Spustit test';
+      startBtn.style.display = 'inline-block';
+      renderStats();
+    }
+    resetStatsBtn.addEventListener('pointerdown', e => e.stopPropagation());
+    resetStatsBtn.addEventListener('click', e => { e.stopPropagation(); resetStats(); });
+    renderStats();
 
     function resetVisual() {
       resultEl.textContent = "";
@@ -129,7 +193,12 @@
     }
 
     function startTest() {
+      clearRevealTimer();
       clearPendingTimeout();
+      if (typeof navigator.vibrate !== 'function') {
+        messageEl.textContent = 'Tento prohlížeč nepodporuje vibrace. Zkus jiné zařízení.';
+        return;
+      }
 
       reactedThisRound = false;
       state = "waiting";
@@ -157,7 +226,7 @@
     function handleReaction(event) {
       event.preventDefault();
 
-      if (event.target === startBtn) return;
+      if (event.target.closest('button') || !event.isPrimary || event.button !== 0) return;
 
       if (reactedThisRound) return;
       reactedThisRound = true;
@@ -182,15 +251,18 @@
         state = "done";
 
         messageEl.textContent = "Tvůj reakční čas (na vibraci):";
-        resultEl.textContent = reactionTime.toFixed(3) + " s";
+        resultEl.textContent = reactionTime.toFixed(3).replace('.', ',') + " s";
+        times.push(reactionTime);
+        renderStats();
 
         // Tlačítko skryté...
         startBtn.style.display = "none";
         startBtn.textContent = "Spustit test znovu";
 
         // ...a ukáže se až po 0,5 s
-        setTimeout(() => {
-          startBtn.style.display = "inline-block";
+        revealTimer = setTimeout(() => {
+          revealTimer = null;
+          if (state === 'done') startBtn.style.display = "inline-block";
         }, 500);
 
       } else {
@@ -206,9 +278,10 @@
       startTest();
     }, {passive:false});
 
-    // MAX citlivost: pointerdown (nejrychlejší) + pointerup jako fallback
+    // Měření při stisku, nikoli při uvolnění prstu; jeden platný výsledek na pokus.
+    startBtn.addEventListener('click', e => { if (e.detail === 0) startTest(); });
     app.addEventListener('pointerdown', handleReaction, {passive:false});
-    app.addEventListener('pointerup', handleReaction, {passive:false});
+
   </script>
 </body>
 </html>

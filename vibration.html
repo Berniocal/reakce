@@ -188,7 +188,7 @@
     }
 
     function vibratePattern() {
-      return typeof navigator.vibrate === 'function' && navigator.vibrate(200);
+      return typeof navigator.vibrate === 'function' && navigator.vibrate([200, 80, 200, 80, 200]);
     }
 
     function clearPendingTimeout() {
@@ -211,6 +211,7 @@
         return;
       }
 
+      navigator.vibrate(0);
       reactedThisRound = false;
       state = "waiting";
       resetVisual();
@@ -242,9 +243,8 @@
 
     function handleReaction(event) {
       const pressedAt = inputTime(event);
-      event.preventDefault();
-
       if (event.target.closest('button') || event.button !== 0) return;
+      event.preventDefault();
 
       if (reactedThisRound) return;
       reactedThisRound = true;
@@ -268,7 +268,7 @@
         const reactionTime = (endTime - startTime) / 1000;
 
         state = "done";
-        navigator.vibrate(0);
+        // Leave the original short vibration pattern intact. It does not affect the recorded time.
 
         messageEl.textContent = "Tvůj reakční čas (na vibraci):";
         resultEl.textContent = reactionTime.toFixed(3).replace('.', ',') + " s";
@@ -291,15 +291,14 @@
       }
     }
 
-    // Start tlačítko: pointerdown je rychlejší než click a nepropadne na app
-    startBtn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
+    // Start on a normal trusted click: touch activation is established on
+    // pointerup, not pointerdown. Do not suppress the browser's native click.
+    startBtn.addEventListener('pointerdown', e => e.stopPropagation());
+    startBtn.addEventListener('click', e => {
       e.stopPropagation();
       startTest();
-    }, {passive:false});
-
-    // Měření při stisku, nikoli při uvolnění prstu; jeden platný výsledek na pokus.
-    startBtn.addEventListener('click', e => { if (e.detail === 0) startTest(); });
+    });
+    // The reaction itself is still measured immediately at pointerdown.
     app.addEventListener('pointerdown', handleReaction, {passive:false});
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && (state === 'waiting' || state === 'ready')) {
